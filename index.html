@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Extended Monty Hall Problem</title>
+    <script
+            src="https://code.jquery.com/jquery-3.3.1.min.js"
+            integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+            crossorigin="anonymous">
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <style>
+
+        body {
+            margin: 35px;
+            border: solid black;
+            padding: 10px;
+        }
+
+        .indent {
+            margin-left: 20px;
+        }
+
+        .smallinput {
+            width: 50px;
+        }
+
+        .door {
+            height: 60px;
+            width: 100px;
+            background-color: lightblue;
+            text-align: center;
+            padding-top: 40px;
+            float: left;
+            margin-right: 25px;
+            margin-top: 25px;
+        }
+
+        .userDoor {
+            border-style: solid;
+            border-color: green;
+            height: 54px; /* reduce height to make room for border */
+            width: 94px; /* reduce height to make room for border */
+
+        }
+
+        .goatDoor {
+            color: red;
+            border-style: solid;
+            border-color: red;
+            height: 54px; /* reduce height to make room for border */
+            width: 94px; /* reduce height to make room for border */
+
+        }
+
+        .prizeDoor {
+            color: green;
+            border-style: solid;
+            border-color: green;
+            height: 54px; /* reduce height to make room for border */
+            width: 94px; /* reduce height to make room for border */
+
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <h2 style='margin-bottom:0px'>Monty Hall Problem</h2>
+    <small>Grant Klich</small>
+    <p class="indent">
+        In the original Monty Hall Problem, a game show host offers you 3 doors to choose from. Behind one door is a
+        valuable prize, but the two
+        other contain goats. <Br>
+        You are asked to choose a door. After choosing, the host opens another door and reveals a goat. He asks you if
+        you'd like to switch to the other closed door.<BR>
+        Is it to your statistical advantage to switch doors? The answer, which may sound surprising, is always yes!
+    </p>
+
+    <h2>Generalized Monty Hall Problem Calculator</h2>
+    <div class="indent">
+        <p>But what if the host offers <b>n</b> doors and reveals <b>m</b> doors with goats to you? Find out your
+            chances,
+            and play for yourself below.</p>
+
+        <form action="/" method="get" id="form">
+            Number of doors (n): <input class="smallinput" type="number" id="n" v-model.number="n" name="n" value=""
+                                        autocomplete="off"/>
+            <br/>
+            Number of reveals (m): <input class="smallinput" type="number" id="m" v-model.number="m" name="m" value=""
+                                          autocomplete="off"/>
+            <br/>
+
+            <p style="color:red">
+                {{ isValid ? "" : "Invalid inputs. m must be at least 2 less than n. The host cannot reveal more goats that there are other doors!" }}
+            </p>
+        </form>
+    </div>
+    <div class="indent validInputView">
+        If there are <b>{{ n }}</b> doors, you choose one, and then Monty reveals
+        <b>{{ m }}</b> doors to be goats, then:<br/>
+        <ul>
+            <li>Chances of winning when switching to another door: <b>{{ pSwitch.toFixed(4) }}</b></li>
+            <li>Chances of winning when staying with your door: <b>{{ pStay.toFixed(4) }}</b></li>
+            <li>You should <b>{{ pStay > pSwitch ? "Stay" : "Switch" }}</b>!</li>
+        </ul>
+    </div>
+    <hr/>
+    <div id="gameDiv" class="validInputView">
+        <h3>Interactive Game with Monty Hall Problem: n = {{ n }}, m = {{ m }}</h3>
+        <div class="indent">
+            <p>The more games you play the closer the win rates below will get to the calculated values above. You can
+                also click the button below to run 50 additional games automatically.</p>
+            <p>Playing with something big like n=10, m=8 will make it very obvious why switching makes sense: If Monty
+                reveals all but one remaining door, then most likely it is the prize!</p>
+            <div id='game-window'></div>
+            <BR>
+            <ul id='message-window' style='clear:both; padding-top: 15px'></ul>
+
+            <button onclick="simulateNGames(50)" id="run-games-btn">(Run 50 Games Automatically)</button>
+            <BR><BR>
+            <div id='stat-window'>
+                <b>Cumulative Statistics:</b>
+                <BR/>
+                <label>Switch Win Rate (switches won / total switches):</label>
+                <input class="smallinput" readonly v-bind:value="switchWinRateRatioStr"> =
+                <input class="smallinput" readonly v-bind:value="switchWinRateDecimal.toFixed(3)">
+                <br/>
+                <label>Stay Win Rate (switches won / total switches):</label>
+                <input class="smallinput" readonly v-bind:value="stayWinRateRatioStr"> =
+                <input class="smallinput" readonly v-bind:value="stayWinRateDecimal.toFixed(3)">
+
+            </div>
+        </div>
+    </div>
+    <BR>
+</div>
+<hr/>
+<h4>Solution Algorithm Explanation</h4>
+<div class="indent">
+    <p>If you stay with your door, it's a simple 1/n probability</p>
+    <p class="indent">pStay = 1 / n </p>
+    <p>However, if you switch, the probability of winning is the probability of not winning with your first choice AND
+        the probability of winning out of the remaining doors. This comes out to the formula:
+    </p>
+    <p class="indent">pSwitch = (1 - 1 / n) * (1 / (n - 1 - m))</p>
+
+    <p>Since you are more likely not to win your first pick, and since there is a smaller number of doors the choose
+        from the next time, your chances of winning will always go up when you switch.</p>
+</div>
+
+
+<script>
+
+    // Vue.js viewmodel, hold data that the view will use and update to automatically
+    var vm = new Vue({
+        el: '#app',
+        data: {
+            n: 3,
+            m: 1,
+            msg: "Choose a Door",
+            numSwitches: 0,
+            numSwitchWins: 0,
+            numStays: 0,
+            numStayWins: 0,
+        },
+        computed: {
+            pStay: function () {
+                return 1 / this.n;
+            },
+            pSwitch: function () {
+                let chance = (1 - 1 / this.n) * (1 / (this.n - 1 - this.m));
+                return chance;
+            },
+
+            isValid: function () {
+                if (this.n <= 0)
+                    return false;
+                if (this.m <= 0)
+                    return false;
+                return (this.n - 2) >= this.m;
+            },
+
+            switchWinRateRatioStr: function () {
+                return this.numSwitchWins + "/" + this.numSwitches;
+            },
+            stayWinRateRatioStr: function () {
+                return this.numStayWins + "/" + this.numStays;
+            },
+            switchWinRateDecimal: function () {
+                return this.numSwitchWins / this.numSwitches;
+            },
+            stayWinRateDecimal: function () {
+                return this.numStayWins / this.numStays;
+            },
+
+        },
+        watch: {
+            n: resetStatsAndStartGame,
+            m: resetStatsAndStartGame,
+            isValid: function (value) { //hide game and calcs if invalid input
+                if (value) {
+                    $(".validInputView").show();
+                } else {
+                    $(".validInputView").hide();
+
+                }
+            }
+        }
+    });
+
+
+    class Door {
+        constructor(prize, open) {
+            this.prize = prize; //boolean, true if prize behind
+            this.open = open; //boolean, true if door is opened
+        }
+    }
+
+    class Game {
+
+        //set up game. This makes n doors with 1 random prize
+        constructor(nDoors, nReveals) {
+            this.doors = [];
+            for (var i = 0; i < nDoors; i++) {
+                this.doors.push(new Door(false, false));
+            }
+            var randomDoor = Math.floor(Math.random() * nDoors); //random 0 to n-1
+
+            this.doors[randomDoor].prize = true; //make random door hold prize
+
+        }
+
+        setUserDoor(n) {
+            this.userDoor = n;
+        }
+
+        setMontyDoor(n) {
+            this.montyDoor = n;
+        }
+
+        setMessage(str) {
+            $('#message-window').empty()
+                .append("<li>" + str + "</li>");
+        }
+
+        appendMessage(str) {
+            $('#message-window').append("<li>" + str + "</li>");
+        }
+
+        openAllDoors() {
+            for (var i = 0; i < this.doors.length; i++) {
+                this.doors[i].open = true;
+            }
+        }
+
+        reloadView() {
+            $("#game-window").empty();
+            this.doors.forEach(function (door, i) {
+
+                var doorDiv = $("<div></div");
+
+                doorDiv.addClass("door");
+                doorDiv.attr('id', i);
+
+                if (door.open) { //set style and text appropriately for open doors
+                    if (door.prize) {
+                        doorDiv.html("<b>PRIZE</b>");
+                        doorDiv.addClass("prizeDoor");
+                    } else {
+                        doorDiv.html("<b>GOAT</b>");
+                        doorDiv.addClass("goatDoor");
+                    }
+
+                } else {
+                    doorDiv.html("Door " + (i + 1));
+                }
+
+                //if user door, add green border styling
+                if (i == this.userDoor) {
+                    doorDiv.addClass('userDoor');
+                }
+
+                $("#game-window").append(doorDiv);
+
+
+            }, this);
+
+
+        }
+    }
+
+    //on page load stuff
+
+
+    var currentGame;
+
+    startGame();
+
+    function resetGameStats() {
+        vm.numStays = 0;
+        vm.numSwitches = 0;
+        vm.numStayWins = 0;
+        vm.numSwitchWins = 0;
+    }
+
+    function resetStatsAndStartGame() {
+        vm.numStays = 0;
+        vm.numSwitches = 0;
+        vm.numStayWins = 0;
+        vm.numSwitchWins = 0;
+        startGame();
+
+    }
+
+    function startGame() {
+
+
+        var n = vm.n;
+        var m = vm.m;
+
+        currentGame = new Game(n, m);
+        currentGame.reloadView();
+        currentGame.setMessage("Click a door");
+
+
+        var t = $(".door").click(function (e) {
+            t.unbind();
+            currentGame.setUserDoor(parseInt(e.target.id));
+            console.log(currentGame.userDoor);
+
+
+            currentGame.appendMessage("You selected door " + (currentGame.userDoor + 1));
+
+
+            openedDoors = [];
+            for (var i = 0; i < currentGame.doors.length; i++) {
+                if (openedDoors.length == m) {
+                    break;
+                } else {
+                    if (!currentGame.doors[i].prize && i != currentGame.userDoor) {
+                        currentGame.doors[i].open = true;
+                        openedDoors.push(i + 1);
+                    }
+                }
+            }
+            currentGame.appendMessage("Monty reveals doors " + openedDoors.toString() + " as goats");
+            currentGame.reloadView();
+
+            currentGame.appendMessage("Click your door again to <b>stay</b>. Or a new door to <b>switch</b>");
+            var t2 = $(".door").click(function (e) {
+                selDoor = parseInt(e.target.id);
+                if (currentGame.doors[selDoor].open)
+                    return; //cant select an already opened door. ignore
+
+                //else continue with switching code
+                t2.unbind();
+                var stay;
+                if (selDoor == currentGame.userDoor) {
+                    stay = true;
+                    vm.numStays++;
+                    currentGame.appendMessage("You <b>stayed</b> with Door " + (selDoor + 1));
+                } else {
+                    stay = false;
+                    vm.numSwitches++;
+                    currentGame.setUserDoor(selDoor);
+                    currentGame.appendMessage("You <b>switched</b> to Door " + (selDoor + 1));
+                }
+                currentGame.openAllDoors();
+                currentGame.reloadView();
+
+                var win;
+                if (currentGame.doors[selDoor].prize) {
+                    currentGame.appendMessage("Congrats! You won the prize!");
+                    win = true;
+
+                } else {
+                    currentGame.appendMessage("Too bad. You got a goat...");
+                    win = false;
+                }
+
+                if (win && stay) {
+                    vm.numStayWins++;
+                }
+                if (win && !stay) {
+                    vm.numSwitchWins++;
+                }
+
+                currentGame.appendMessage("<button id='play-again-btn'>Play Again</button>");
+
+                currentGame.reloadView();
+                $("#play-again-btn").click(startGame);
+
+            });
+
+        });
+
+    }
+
+    // loop n times
+    // random select until $(".prizeDoor").length == 1
+    // then click play again
+    function randomSelectDoor() {
+        //TODO use selector that does not include .userDoor or .goatDoor
+        let len = $(".door").length;
+        let randomIndex = Math.floor(Math.random() * len);
+        console.log("Clicking Door " + (randomIndex + 1));
+
+        $(".door").eq(randomIndex).click();
+    }
+
+    function simulateNGames(n) {
+        // loop for n games
+        for (let i = 0; i < n; i++) {
+            //click doors until game ends
+            while ($(".prizeDoor").length !== 1) {
+                randomSelectDoor();
+            }
+            //then click Play Again for each game
+            $("#play-again-btn").click();
+
+        }
+    }
+
+</script>
+</body>
+</html>
+    
